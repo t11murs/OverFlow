@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM eclipse-temurin:21-jdk-alpine-3.24 AS build
+FROM eclipse-temurin:24-jdk-alpine-3.22 AS build
 
 ARG SERVICE_NAME
 WORKDIR /workspace
@@ -12,7 +12,7 @@ RUN --mount=type=cache,id=orderflow-gradle,target=/root/.gradle \
     && find "services/${SERVICE_NAME}/build/libs" -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' \
        -exec cp '{}' /workspace/application.jar \;
 
-FROM eclipse-temurin:21-jre-alpine-3.24
+FROM eclipse-temurin:24-jre-alpine-3.22
 
 RUN addgroup -S -g 10001 orderflow \
     && adduser -S -D -H -u 10001 -G orderflow orderflow \
