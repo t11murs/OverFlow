@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderflow.local/contracts/kafka/inventory-command-message-v1.schema.json",
+  "title": "Полное сообщение команды Inventory v1",
+  "allOf": [
+    { "$ref": "event-envelope-v1.schema.json" },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "eventType": { "const": "ReserveInventory" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "order-service" },
+            "payload": { "$ref": "inventory-command-v1.schema.json#/$defs/reserve" }
+          }
+        },
+        {
+          "properties": {
+            "eventType": { "enum": ["ConfirmInventory", "ReleaseInventory"] },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "order-service" },
+            "payload": { "$ref": "inventory-command-v1.schema.json#/$defs/orderCommand" }
+          }
+        }
+      ]
+    }
+  ]
+}

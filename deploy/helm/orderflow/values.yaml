@@ -1,0 +1,128 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ""
+  pullPolicy: IfNotPresent
+  tag: "0.1.0-SNAPSHOT"
+imagePullSecrets: []
+
+servicePorts:
+  application: 8080
+  management: 9080
+
+commonConfig:
+  SPRING_PROFILES_ACTIVE: production
+  SERVER_PORT: "8080"
+  MANAGEMENT_SERVER_PORT: "9080"
+  MANAGEMENT_SERVER_ADDRESS: 0.0.0.0
+  MANAGEMENT_ENDPOINTS: health,info,prometheus
+  MANAGEMENT_QUEUE_METRICS_REFRESH_INTERVAL: 30s
+  LOG_FORMAT: ecs
+  SERVER_SHUTDOWN: graceful
+  SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 25s
+  KAFKA_BOOTSTRAP_SERVERS: kafka.kafka.svc.cluster.local:9092
+  REDIS_HOST: redis.redis.svc.cluster.local
+  REDIS_PORT: "6379"
+  CATALOG_CACHE_ENABLED: "true"
+  CATALOG_PUBLIC_PRODUCT_CACHE_TTL: 1m
+  CATALOG_PUBLIC_OFFER_CACHE_TTL: 30s
+  JWT_ISSUER: identity-service
+
+javaToolOptions: >-
+  -XX:MaxRAMPercentage=75.0
+  -XX:+ExitOnOutOfMemoryError
+  -Djava.io.tmpdir=/tmp
+
+podAnnotations: {}
+podLabels: {}
+
+rollout:
+  minReadySeconds: 10
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 3
+  terminationGracePeriodSeconds: 35
+  maxUnavailable: 0
+  maxSurge: 1
+
+probes:
+  startup:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 30
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  liveness:
+    periodSeconds: 15
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+securityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+networkPolicy:
+  enabled: true
+  gatewayNamespaceLabels:
+    orderflow.io/gateway: "true"
+  monitoringNamespaceLabels:
+    orderflow.io/monitoring: "true"
+
+services:
+  identity-service:
+    image: identity-service
+    secretName: identity-service-runtime
+    replicas: 2
+    public: true
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 768Mi}
+    autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70}
+  catalog-service:
+    image: catalog-service
+    secretName: catalog-service-runtime
+    replicas: 2
+    public: true
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 768Mi}
+    autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 70}
+  inventory-service:
+    image: inventory-service
+    secretName: inventory-service-runtime
+    replicas: 2
+    public: true
+    resources:
+      requests: {cpu: 150m, memory: 256Mi}
+      limits: {cpu: "1", memory: 768Mi}
+    autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 70}
+  order-service:
+    image: order-service
+    secretName: order-service-runtime
+    replicas: 2
+    public: true
+    resources:
+      requests: {cpu: 200m, memory: 384Mi}
+      limits: {cpu: "2", memory: 1Gi}
+    autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 10, targetCPUUtilizationPercentage: 65}
+  payment-service:
+    image: payment-service
+    secretName: payment-service-runtime
+    replicas: 2
+    public: false
+    resources:
+      requests: {cpu: 150m, memory: 256Mi}
+      limits: {cpu: "1", memory: 768Mi}
+    autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 65}
+  notification-service:
+    image: notification-service
+    secretName: notification-service-runtime
+    replicas: 2
+    public: false
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 768Mi}
+    autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 70}

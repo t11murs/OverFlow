@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderflow.local/contracts/kafka/order-event-message-v1.schema.json",
+  "title": "Полное итоговое событие Order v1",
+  "allOf": [
+    { "$ref": "event-envelope-v1.schema.json" },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "eventType": { "const": "OrderConfirmed" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "order-service" },
+            "payload": {
+              "allOf": [
+                { "$ref": "order-event-v1.schema.json" },
+                { "properties": { "status": { "const": "CONFIRMED" } } }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "eventType": { "const": "OrderCancelled" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "order-service" },
+            "payload": {
+              "allOf": [
+                { "$ref": "order-event-v1.schema.json" },
+                { "properties": { "status": { "const": "CANCELLED" } } }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: orderflow
+description: Развёртывание микросервисной системы OrderFlow
+type: application
+version: 0.1.0
+appVersion: "0.1.0-SNAPSHOT"
+kubeVersion: ">=1.30.0-0 <1.38.0-0"
+annotations:
+  category: Backend

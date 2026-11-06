@@ -1,0 +1,122 @@
+{{- range $name, $service := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orderflow.serviceName" (list $ $name) }}
+  labels:
+    {{- include "orderflow.commonLabels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: backend
+spec:
+  {{- if not $service.autoscaling.enabled }}
+  replicas: {{ $service.replicas }}
+  {{- end }}
+  revisionHistoryLimit: {{ $.Values.rollout.revisionHistoryLimit }}
+  progressDeadlineSeconds: {{ $.Values.rollout.progressDeadlineSeconds }}
+  minReadySeconds: {{ $.Values.rollout.minReadySeconds }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ $.Values.rollout.maxUnavailable }}
+      maxSurge: {{ $.Values.rollout.maxSurge }}
+  selector:
+    matchLabels:
+      {{- include "orderflow.selectorLabels" (list $ $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "orderflow.selectorLabels" (list $ $name) | nindent 8 }}
+        app.kubernetes.io/part-of: orderflow
+        app.kubernetes.io/component: backend
+        orderflow.io/exposure: {{ ternary "public" "internal" $service.public }}
+        {{- with $.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/common-config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "orderflow.serviceName" (list $ $name) }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ $.Values.rollout.terminationGracePeriodSeconds }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $.Values.securityContext.runAsUser }}
+        runAsGroup: {{ $.Values.securityContext.runAsGroup }}
+        fsGroup: {{ $.Values.securityContext.fsGroup }}
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "orderflow.selectorLabels" (list $ $name) | nindent 14 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "orderflow.image" (list $ $service) | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: {{ $.Values.servicePorts.application }}
+              protocol: TCP
+            - name: management
+              containerPort: {{ $.Values.servicePorts.management }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "orderflow.commonConfigName" $ }}
+            - secretRef:
+                name: {{ $service.secretName }}
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ $.Values.javaToolOptions | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: {{ $.Values.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ $.Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ $.Values.probes.startup.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: {{ $.Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ $.Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ $.Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: {{ $.Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ $.Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ $.Values.probes.liveness.failureThreshold }}
+          resources:
+            {{- toYaml $service.resources | nindent 12 }}
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 128Mi
+{{- end }}

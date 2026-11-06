@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderflow.local/contracts/kafka/order-event-v1.schema.json",
+  "title": "Событие заказа для Notification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "recipientUserId", "status", "templateData"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "recipientUserId": { "type": "string", "format": "uuid" },
+    "status": { "enum": ["CONFIRMED", "CANCELLED"] },
+    "templateData": { "type": "object" }
+  }
+}

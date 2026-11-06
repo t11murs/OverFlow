@@ -1,0 +1,41 @@
+{{- range $name, $service := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "orderflow.serviceName" (list $ $name) }}
+  labels:
+    {{- include "orderflow.commonLabels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "orderflow.selectorLabels" (list $ $name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $.Values.servicePorts.application }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "orderflow.managementServiceName" (list $ $name) }}
+  labels:
+    {{- include "orderflow.commonLabels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: management
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /actuator/prometheus
+    prometheus.io/port: {{ $.Values.servicePorts.management | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "orderflow.selectorLabels" (list $ $name) | nindent 4 }}
+  ports:
+    - name: management
+      port: {{ $.Values.servicePorts.management }}
+      targetPort: management
+      protocol: TCP
+{{- end }}

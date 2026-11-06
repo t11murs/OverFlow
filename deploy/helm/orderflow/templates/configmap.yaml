@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "orderflow.commonConfigName" . }}
+  labels:
+    {{- include "orderflow.commonLabels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.commonConfig }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  CATALOG_BASE_URL: {{ printf "http://%s:%v" (include "orderflow.serviceName" (list . "catalog-service")) .Values.servicePorts.application | quote }}

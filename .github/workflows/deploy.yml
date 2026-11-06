@@ -1,0 +1,118 @@
+name: Развёртывание OrderFlow
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Целевое GitHub Environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      image_tag:
+        description: Ранее опубликованный неизменяемый тег образов
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Развёртывание в ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+      KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS }}
+      REDIS_HOST: ${{ vars.REDIS_HOST }}
+      KUBERNETES_NAMESPACE: ${{ vars.KUBERNETES_NAMESPACE }}
+      IMAGE_PULL_SECRET: ${{ vars.IMAGE_PULL_SECRET }}
+      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+      HELM_DRIVER: configmap
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Установить Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.22.1
+
+      - name: Установить kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.37.0
+
+      - name: Проверить параметры выпуска
+        shell: bash
+        run: |
+          for variable in IMAGE_TAG IMAGE_REGISTRY KAFKA_BOOTSTRAP_SERVERS REDIS_HOST KUBERNETES_NAMESPACE KUBE_CONFIG_DATA; do
+            if [[ -z "${!variable}" ]]; then
+              echo "Не задан обязательный параметр ${variable}" >&2
+              exit 1
+            fi
+          done
+
+          if [[ ! "${IMAGE_TAG}" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Недопустимый OCI tag" >&2
+            exit 1
+          fi
+
+      - name: Настроить доступ к Kubernetes
+        shell: bash
+        run: |
+          config_file="${RUNNER_TEMP}/orderflow-kubeconfig"
+          umask 077
+          printf '%s' "${KUBE_CONFIG_DATA}" | base64 --decode > "${config_file}"
+          echo "KUBECONFIG=${config_file}" >> "${GITHUB_ENV}"
+
+      - name: Проверить права в namespace
+        shell: bash
+        run: |
+          allowed="$(kubectl auth can-i create deployments.apps --namespace "${KUBERNETES_NAMESPACE}")"
+          if [[ "${allowed}" != "yes" ]]; then
+            echo "Deployment identity не может управлять Deployment в ${KUBERNETES_NAMESPACE}" >&2
+            exit 1
+          fi
+
+      - name: Обновить Helm release
+        shell: bash
+        run: |
+          helm_args=(
+            upgrade --install orderflow ./deploy/helm/orderflow
+            --namespace "${KUBERNETES_NAMESPACE}"
+            --atomic
+            --wait
+            --timeout 10m
+            --history-max 10
+            --set-string "image.registry=${IMAGE_REGISTRY}"
+            --set-string "image.tag=${IMAGE_TAG}"
+            --set-json "commonConfig.KAFKA_BOOTSTRAP_SERVERS=$(jq -Rn --arg value "${KAFKA_BOOTSTRAP_SERVERS}" '$value')"
+            --set-string "commonConfig.REDIS_HOST=${REDIS_HOST}"
+          )
+
+          if [[ -n "${IMAGE_PULL_SECRET}" ]]; then
+            helm_args+=(--set-string "imagePullSecrets[0].name=${IMAGE_PULL_SECRET}")
+          fi
+
+          helm "${helm_args[@]}" --dry-run=server > /dev/null
+          helm "${helm_args[@]}"
+
+      - name: Проверить завершение rollout
+        run: >-
+          kubectl --namespace "${KUBERNETES_NAMESPACE}"
+          rollout status deployment
+          --selector app.kubernetes.io/instance=orderflow
+          --timeout=5m

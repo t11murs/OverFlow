@@ -1,0 +1,17 @@
+{{- range $name, $service := .Values.services }}
+{{- if or $service.autoscaling.enabled (gt (int $service.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "orderflow.serviceName" (list $ $name) }}
+  labels:
+    {{- include "orderflow.commonLabels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "orderflow.selectorLabels" (list $ $name) | nindent 6 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,82 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:15433/catalog_service}
+    username: ${DB_USERNAME:catalog_service}
+    password: ${DB_PASSWORD:catalog_local}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
+      timeout: ${REDIS_TIMEOUT:1s}
+      repositories:
+        enabled: false
+
+catalog:
+  cache:
+    enabled: ${CATALOG_CACHE_ENABLED:true}
+    public-product-ttl: ${CATALOG_PUBLIC_PRODUCT_CACHE_TTL:1m}
+    public-offer-ttl: ${CATALOG_PUBLIC_OFFER_CACHE_TTL:30s}
+
+management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9082}
+    address: ${MANAGEMENT_SERVER_ADDRESS:127.0.0.1}
+  endpoints:
+    access:
+      default: none
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS:health,info,prometheus}
+  endpoint:
+    health:
+      access: read-only
+      probes:
+        enabled: true
+      show-details: never
+    info:
+      access: read-only
+    prometheus:
+      access: read-only
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 100ms,250ms,500ms,1s,2s
+
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:identity-service}
+    access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET}
+    order-issuer: order-service
+    inventory-issuer: inventory-service
+    audience: catalog-service

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderflow.local/contracts/kafka/payment-event-message-v1.schema.json",
+  "title": "Полное сообщение результата Payment v1",
+  "allOf": [
+    { "$ref": "event-envelope-v1.schema.json" },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "eventType": { "const": "PaymentCaptured" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "payment-service" },
+            "payload": { "$ref": "payment-event-v1.schema.json#/$defs/captured" }
+          }
+        },
+        {
+          "properties": {
+            "eventType": { "enum": ["PaymentFailed", "PaymentRefundFailed"] },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "payment-service" },
+            "payload": { "$ref": "payment-event-v1.schema.json#/$defs/failed" }
+          }
+        },
+        {
+          "properties": {
+            "eventType": { "const": "PaymentRefunded" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "payment-service" },
+            "payload": { "$ref": "payment-event-v1.schema.json#/$defs/refunded" }
+          }
+        }
+      ]
+    }
+  ]
+}

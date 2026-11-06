@@ -1,0 +1,99 @@
+name: Проверки безопасности
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Новые зависимости
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.repository.visibility == 'public' || vars.ENABLE_GITHUB_ADVANCED_SECURITY == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Проверить изменения зависимостей
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-1.0-only, AGPL-3.0-only
+
+  codeql:
+    name: CodeQL для Java
+    if: >-
+      github.event.repository.visibility == 'public' ||
+      vars.ENABLE_GITHUB_ADVANCED_SECURITY == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Инициализировать CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      - name: Настроить Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Настроить Gradle Wrapper
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+          cache-read-only: true
+
+      - name: Скомпилировать проект для анализа
+        run: ./gradlew build -x test --no-daemon --stacktrace
+
+      - name: Выполнить CodeQL-анализ
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin
+
+  repository-scan:
+    name: Репозиторий и IaC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Найти уязвимости, секреты и ошибки конфигурации
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table

@@ -1,0 +1,7 @@
+OrderFlow развёрнут в namespace {{ .Release.Namespace }}.
+
+Проверьте состояние:
+  kubectl -n {{ .Release.Namespace }} get deployments,pods
+
+Management endpoint доступны только через management Service и разрешённую сеть мониторинга.
+Перед production-трафиком убедитесь, что все внешние Secret существуют и NetworkPolicy поддерживается CNI-контроллером.

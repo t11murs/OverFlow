@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderflow.local/contracts/kafka/payment-event-v1.schema.json",
+  "title": "Результат Payment v1",
+  "oneOf": [
+    { "$ref": "#/$defs/captured" },
+    { "$ref": "#/$defs/failed" },
+    { "$ref": "#/$defs/refunded" }
+  ],
+  "$defs": {
+    "captured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderId", "paymentId"],
+      "properties": {
+        "orderId": { "type": "string", "format": "uuid" },
+        "paymentId": { "type": "string", "format": "uuid" },
+        "providerReference": { "type": ["string", "null"], "maxLength": 255 }
+      }
+    },
+    "failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderId", "code"],
+      "properties": {
+        "orderId": { "type": "string", "format": "uuid" },
+        "paymentId": { "type": ["string", "null"], "format": "uuid" },
+        "code": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "message": { "type": ["string", "null"], "maxLength": 500 }
+      }
+    },
+    "refunded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderId", "paymentId", "refundId"],
+      "properties": {
+        "orderId": { "type": "string", "format": "uuid" },
+        "paymentId": { "type": "string", "format": "uuid" },
+        "refundId": { "type": "string", "format": "uuid" },
+        "providerReference": { "type": ["string", "null"], "maxLength": 255 }
+      }
+    }
+  }
+}

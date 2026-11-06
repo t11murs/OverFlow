@@ -1,0 +1,188 @@
+name: Сборка и публикация образов
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Неизменяемый тег для всех шести образов
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Проверить исходный код и chart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Настроить Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Настроить Gradle Wrapper
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+
+      - name: Выполнить проверки качества
+        run: ./gradlew qualityCheck --no-daemon --stacktrace
+
+      - name: Установить Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.22.1
+
+      - name: Проверить Helm chart
+        run: |
+          helm lint ./deploy/helm/orderflow --strict
+          helm template orderflow ./deploy/helm/orderflow \
+            --namespace orderflow \
+            --values ./deploy/helm/orderflow/values-production.example.yaml \
+            --set-string image.tag=release-validation \
+            > /dev/null
+
+  images:
+    name: Образ ${{ matrix.service }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        service:
+          - identity-service
+          - catalog-service
+          - inventory-service
+          - order-service
+          - payment-service
+          - notification-service
+    env:
+      SERVICE_NAME: ${{ matrix.service }}
+      INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Вычислить имя и тег образа
+        id: image
+        shell: bash
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          image="ghcr.io/${repository}/${SERVICE_NAME}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            tag="${GITHUB_REF_NAME#v}"
+          else
+            tag="${INPUT_IMAGE_TAG}"
+          fi
+
+          if [[ ! "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Недопустимый OCI tag" >&2
+            exit 1
+          fi
+
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+          echo "reference=${image}:${tag}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Войти в GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Настроить Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Собрать локальный образ
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          pull: true
+          load: true
+          push: false
+          build-args: SERVICE_NAME=${{ matrix.service }}
+          tags: ${{ steps.image.outputs.reference }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Проверить уязвимости образа
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.reference }}
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Сформировать SBOM
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.reference }}
+          format: cyclonedx
+          output: sbom-${{ matrix.service }}.cdx.json
+          exit-code: "0"
+          skip-setup-trivy: true
+
+      - name: Сохранить SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Опубликовать проверенный образ
+        id: publish
+        shell: bash
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: |
+          docker push "${IMAGE_REFERENCE}"
+          repository_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REFERENCE}")"
+          digest="${repository_digest##*@}"
+          if [[ ! "${digest}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Не удалось определить digest опубликованного образа" >&2
+            exit 1
+          fi
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Подписать provenance attestation
+        if: >-
+          github.event.repository.visibility == 'public' ||
+          vars.ENABLE_ATTESTATIONS == 'true'
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.image.outputs.image }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true

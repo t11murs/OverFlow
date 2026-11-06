@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:local-development-secret-change-before-production}
+  service-jwt:
+    secret: ${SERVICE_JWT_SECRET:local-service-token-secret-change-before-production}
+
+logging:
+  level:
+    com.orderflow: DEBUG

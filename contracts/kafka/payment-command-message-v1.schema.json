@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderflow.local/contracts/kafka/payment-command-message-v1.schema.json",
+  "title": "Полное сообщение команды Payment v1",
+  "allOf": [
+    { "$ref": "event-envelope-v1.schema.json" },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "eventType": { "const": "CapturePayment" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "order-service" },
+            "payload": { "$ref": "payment-command-v1.schema.json#/$defs/capture" }
+          }
+        },
+        {
+          "properties": {
+            "eventType": { "const": "RefundPayment" },
+            "eventVersion": { "const": 1 },
+            "producer": { "const": "order-service" },
+            "payload": { "$ref": "payment-command-v1.schema.json#/$defs/refund" }
+          }
+        }
+      ]
+    }
+  ]
+}

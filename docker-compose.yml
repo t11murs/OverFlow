@@ -1,0 +1,186 @@
+name: orderflow
+
+services:
+  identity-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: identity_service
+      POSTGRES_USER: identity_service
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity_local}
+    ports:
+      - "${IDENTITY_DB_PORT:-15432}:5432"
+    volumes:
+      - identity-db-data-v18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD} psql -h 127.0.0.1 -U identity_service -d identity_service -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  catalog-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: catalog_service
+      POSTGRES_USER: catalog_service
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:-catalog_local}
+    ports:
+      - "${CATALOG_DB_PORT:-15433}:5432"
+    volumes:
+      - catalog-db-data-v18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD} psql -h 127.0.0.1 -U catalog_service -d catalog_service -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  inventory-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: inventory_service
+      POSTGRES_USER: inventory_service
+      POSTGRES_PASSWORD: ${INVENTORY_DB_PASSWORD:-inventory_local}
+    ports:
+      - "${INVENTORY_DB_PORT:-15434}:5432"
+    volumes:
+      - inventory-db-data-v18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD} psql -h 127.0.0.1 -U inventory_service -d inventory_service -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  order-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: orders_service
+      POSTGRES_USER: orders_service
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:-orders_local}
+    ports:
+      - "${ORDER_DB_PORT:-15435}:5432"
+    volumes:
+      - order-db-data-v18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD} psql -h 127.0.0.1 -U orders_service -d orders_service -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  payment-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: payment_service
+      POSTGRES_USER: payment_service
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_local}
+    ports:
+      - "${PAYMENT_DB_PORT:-15436}:5432"
+    volumes:
+      - payment-db-data-v18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD} psql -h 127.0.0.1 -U payment_service -d payment_service -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  notification-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: notification_service
+      POSTGRES_USER: notification_service
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification_local}
+    ports:
+      - "${NOTIFICATION_DB_PORT:-15437}:5432"
+    volumes:
+      - notification-db-data-v18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD} psql -h 127.0.0.1 -U notification_service -d notification_service -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.10.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.1.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  kafka-init:
+    image: apache/kafka:4.1.1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        for topic in \
+          orderflow.inventory.commands.v1 \
+          orderflow.inventory.commands.v1.dlq \
+          orderflow.inventory.events.v1 \
+          orderflow.inventory.events.v1.dlq \
+          orderflow.payment.commands.v1 \
+          orderflow.payment.commands.v1.dlq \
+          orderflow.payment.events.v1 \
+          orderflow.payment.events.v1.dlq \
+          orderflow.order.events.v1 \
+          orderflow.order.events.v1.dlq; do
+          /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server kafka:29092 \
+            --create \
+            --if-not-exists \
+            --topic "$${topic}" \
+            --partitions 3 \
+            --replication-factor 1
+        done
+    restart: "no"
+
+volumes:
+  identity-db-data-v18:
+  catalog-db-data-v18:
+  inventory-db-data-v18:
+  order-db-data-v18:
+  payment-db-data-v18:
+  notification-db-data-v18:
+  redis-data:
+  kafka-data:
