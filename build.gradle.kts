@@ -37,7 +37,7 @@ configure(serviceProjects) {
         add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
         add("testImplementation", "org.mockito:mockito-junit-jupiter")
         add("testImplementation", "com.tngtech.archunit:archunit:1.5.1")
-        add("testImplementation", "com.networknt:json-schema-validator:3.0.8")
+        add("testImplementation", "com.networknt:json-schema-validator:3.0.9")
         add("testImplementation", "org.testcontainers:testcontainers-junit-jupiter")
         add("testImplementation", "org.testcontainers:testcontainers-postgresql")
         add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
