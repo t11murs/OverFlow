@@ -1,6 +1,6 @@
 plugins {
     base
-    id("org.springframework.boot") version "4.1.2" apply false
+    id("org.springframework.boot") version "4.2.0" apply false
 }
 
 allprojects {
@@ -20,7 +20,7 @@ configure(serviceProjects) {
     apply(plugin = "jacoco")
 
     dependencies {
-        add("implementation", platform("org.springframework.boot:spring-boot-dependencies:4.1.2"))
+        add("implementation", platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
         add("implementation", "org.springframework.boot:spring-boot-starter-webmvc")
         add("implementation", "org.springframework.boot:spring-boot-starter-data-jpa")
         add("implementation", "org.springframework.boot:spring-boot-starter-security")
@@ -33,11 +33,11 @@ configure(serviceProjects) {
 
         add("runtimeOnly", "org.postgresql:postgresql")
 
-        add("testImplementation", platform("org.springframework.boot:spring-boot-dependencies:4.1.2"))
+        add("testImplementation", platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
         add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
         add("testImplementation", "org.mockito:mockito-junit-jupiter")
         add("testImplementation", "com.tngtech.archunit:archunit:1.5.1")
-        add("testImplementation", "com.networknt:json-schema-validator:3.0.8")
+        add("testImplementation", "com.networknt:json-schema-validator:3.0.9")
         add("testImplementation", "org.testcontainers:testcontainers-junit-jupiter")
         add("testImplementation", "org.testcontainers:testcontainers-postgresql")
         add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")

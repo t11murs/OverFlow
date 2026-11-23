@@ -5,10 +5,10 @@ plugins {
 description = "OrderFlow DLQ replay administration tool"
 
 dependencies {
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.2"))
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
     implementation("org.apache.kafka:kafka-clients")
 
-    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.2"))
+    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

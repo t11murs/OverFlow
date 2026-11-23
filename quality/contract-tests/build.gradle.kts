@@ -5,9 +5,9 @@ plugins {
 description = "Автоматические проверки удалённых контрактов OrderFlow"
 
 dependencies {
-    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.2"))
+    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("com.networknt:json-schema-validator:3.0.8")
+    testImplementation("com.networknt:json-schema-validator:3.0.9")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
